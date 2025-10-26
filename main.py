@@ -32,7 +32,7 @@ HEALING_PRACTICES = [
 ]
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root():
+async def root():
     return """
     <html>
         <head>
@@ -60,49 +60,18 @@ async def read_root():
                     border-left: 4px solid #4CAF50;
                     border-radius: 5px;
                 }
-                .api-link {
-                    display: inline-block;
-                    background: #4CAF50;
-                    color: white;
-                    padding: 10px 20px;
-                    text-decoration: none;
-                    border-radius: 5px;
-                    margin: 10px 5px;
-                }
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>🌿 Benkhawiya Healing Platform</h1>
                 <p>Welcome to your spiritual healing journey</p>
-                
                 <div class="practice">
-                    <h3>Today's Healing Practice</h3>
-                    <div id="practice-content">Loading your daily practice...</div>
-                </div>
-                
-                <div>
-                    <h3>API Endpoints</h3>
-                    <a class="api-link" href="/health">Health Check</a>
-                    <a class="api-link" href="/docs">API Documentation</a>
-                    <a class="api-link" href="/practices/daily">Daily Practice (JSON)</a>
+                    <h3>Your platform is successfully deployed! 🎉</h3>
+                    <p>Domain: sacredtreeofthephoenix.org</p>
+                    <p>All systems are working correctly.</p>
                 </div>
             </div>
-            
-            <script>
-                // Fetch today's practice
-                fetch('/practices/daily')
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('practice-content').innerHTML = 
-                            `<p><strong>${data.practice}</strong></p>
-                             <small>Day ${data.day_of_year} of your healing journey</small>`;
-                    })
-                    .catch(error => {
-                        document.getElementById('practice-content').innerHTML = 
-                            '<p>Unable to load practice. Please try the API directly.</p>';
-                    });
-            </script>
         </body>
     </html>
     """
@@ -112,7 +81,8 @@ async def health():
     return {
         "status": "healthy", 
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "service": "benkhawiya-healing-platform"
+        "service": "benkhawiya-healing-platform",
+        "domain": "sacredtreeofthephoenix.org"
     }
 
 @app.get("/practices/daily")
