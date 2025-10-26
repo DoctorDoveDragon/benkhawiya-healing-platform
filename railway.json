@@ -7,6 +7,6 @@
     "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1",
     "restartPolicyType": "ON_FAILURE",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 80
+    "healthcheckTimeout": 30
   }
 }
