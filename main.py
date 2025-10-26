@@ -49,7 +49,8 @@ async def health():
     return {
         "status": "healthy", 
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "benkhawiya-healing-platform"
+        "service": "benkhawiya-healing-platform",
+        "port": os.getenv("PORT", "8000")
     }
 
 @app.get("/practices/daily")
@@ -64,6 +65,21 @@ async def daily_practice():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+# Robust port handling
+def get_port():
+    port_str = os.getenv("PORT", "8000")
+    try:
+        port = int(port_str)
+        if 0 <= port <= 65535:
+            return port
+        else:
+            logger.warning(f"Port {port} out of range, using 8000")
+            return 8000
+    except ValueError:
+        logger.warning(f"Invalid PORT value: {port_str}, using 8000")
+        return 8000
+
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = get_port()
+    logger.info(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
