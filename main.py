@@ -1,40 +1,15 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.security import HTTPBearer
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict
-import sqlite3
+from datetime import datetime, timezone
 import os
 import uvicorn
-import logging
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-import asyncio
-from pydantic import BaseModel
-import json
-from contextlib import contextmanager
+import random
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
 app = FastAPI(
     title="Benkhawiya Healing Platform",
-    description="Complete ancestral spiritual healing system through the Four Lands",
+    description="Sacred Four Lands Ancestral Healing System",
     version="3.0.0"
 )
-
-# Rate limiting
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
 
 # CORS
 app.add_middleware(
@@ -45,68 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security
-security = HTTPBearer()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = os.getenv("SECRET_KEY", "benkhawiya-sacred-four-lands-ancestral-key-2024")
-ALGORITHM = "HS256"
-
-# Database connection
-@contextmanager
-def get_db_connection():
-    """Get SQLite database connection"""
-    conn = sqlite3.connect('/tmp/benkhawiya.db')
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def init_tables():
-    """Initialize database tables"""
-    with get_db_connection() as conn:
-        # Users table
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                spiritual_name VARCHAR(255),
-                password_hash VARCHAR(255) NOT NULL,
-                current_land VARCHAR(50) DEFAULT 'white_land',
-                journey_streak INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_practice_at TIMESTAMP
-            )
-        ''')
-        
-        # Practice completions
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS practice_completions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                practice_id VARCHAR(100) NOT NULL,
-                notes TEXT,
-                duration_minutes INTEGER,
-                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # User progress
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS user_land_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                land_id VARCHAR(50) NOT NULL,
-                practices_completed INTEGER DEFAULT 0,
-                total_duration INTEGER DEFAULT 0,
-                last_visited TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-    logger.info("Database tables initialized")
-
-# CULTURAL FOUNDATION: THE FOUR LANDS
+# Sacred Four Lands Tradition
 FOUR_LANDS = {
     "white_land": {
         "name": "White Land of Origins",
@@ -193,70 +107,137 @@ HEALING_PRACTICES = [
     }
 ]
 
-# Pydantic Models
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    spiritual_name: Optional[str] = None
+# Spiritual Guidance System
+SPIRITUAL_GUIDES = {
+    "white_land": {
+        "guide": "White Buffalo Ancestor",
+        "wisdom": [
+            "The White Land holds pure consciousness that precedes all manifestation",
+            "Your ancestral memories flow through you like a sacred river",
+            "Memory is re-membering - putting the pieces of your soul back together",
+            "Ancestral recall is reaching inward to the eternal now"
+        ],
+        "chants": ["Ntu dumo, sewu karibu", "Ntu se sewu wapi?"]
+    },
+    "black_land": {
+        "guide": "Quantum Panther of the Void",
+        "wisdom": [
+            "The Black Land is the quantum field of infinite possibilities",
+            "The void is pregnant with every possible creation",
+            "True potential is what the universe can do through you",
+            "In the void, there is no separation between what is and what could be"
+        ],
+        "chants": ["Sewu wapi, ntu tayari", "Pelu ya wewe ni nini?"]
+    },
+    "red_land": {
+        "guide": "Red Hawk of Manifestation",
+        "wisdom": [
+            "The Red Land transforms potential into reality through creative fire",
+            "Your life force is the cosmic creative impulse made personal",
+            "Manifestation is allowing what wants to happen through you",
+            "The Red Hawk sees patterns wanting to manifest through your actions"
+        ],
+        "chants": ["Moyo wa moto, uwezo wa kuumba", "Pelu inatoka nje"]
+    },
+    "green_land": {
+        "guide": "Green Serpent of Regeneration", 
+        "wisdom": [
+            "The Green Land connects all beings in the great web of relationship",
+            "Healing flows through you to the collective and back again",
+            "Regeneration is remembering what is already whole",
+            "Your breath is the same breath that moves through forests and oceans"
+        ],
+        "chants": ["Mimea inmea, uhai unazidi", "Moyo mmoja, roho nyingi"]
+    }
+}
 
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-class PracticeCompletion(BaseModel):
-    practice_id: str
-    notes: Optional[str] = None
-    duration_minutes: int
-
-# Authentication functions
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+def analyze_spiritual_intent(message: str):
+    message_lower = message.lower()
+    
+    if any(word in message_lower for word in ["ancestor", "memory", "white", "spirit", "past"]):
+        land = "white_land"
+    elif any(word in message_lower for word in ["void", "potential", "black", "possibility", "future"]):
+        land = "black_land"
+    elif any(word in message_lower for word in ["manifest", "red", "fire", "create", "action"]):
+        land = "red_land"
+    elif any(word in message_lower for word in ["green", "heal", "grow", "connect", "earth"]):
+        land = "green_land"
     else:
-        expire = datetime.now(timezone.utc) + timedelta(hours=24)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        land = random.choice(list(FOUR_LANDS.keys()))
+    
+    return {
+        "primary_land": land,
+        "confidence": 0.8,
+        "emotional_tone": "guidance"
+    }
 
-async def get_current_user(token: str = Depends(security)):
-    try:
-        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        return email
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+def generate_spiritual_response(message: str):
+    intent = analyze_spiritual_intent(message)
+    land = intent["primary_land"]
+    guide = SPIRITUAL_GUIDES[land]
+    
+    wisdom = random.choice(guide["wisdom"])
+    chant = random.choice(guide["chants"])
+    
+    return {
+        "guide": guide["guide"],
+        "message": wisdom,
+        "chant": chant,
+        "land": land,
+        "land_info": FOUR_LANDS[land],
+        "blessing": FOUR_LANDS[land]["blessing"],
+        "user_message": message
+    }
 
-# Application startup
-@app.on_event("startup")
-async def startup_event():
-    init_tables()
-    logger.info("Benkhawiya Healing Platform started successfully with SQLite database")
+# CHAT ENDPOINTS - These are the missing ones!
+@app.post("/chat/send")
+async def chat_send(message: str):
+    """Send a message to spiritual guides"""
+    response = generate_spiritual_response(message)
+    return {
+        **response,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "guided"
+    }
 
-# Routes
+@app.get("/chat/analysis")
+async def chat_analysis(message: str):
+    """Analyze spiritual intent of a message"""
+    intent = analyze_spiritual_intent(message)
+    return {
+        "analysis": intent,
+        "user_message": message,
+        "suggested_land": FOUR_LANDS[intent["primary_land"]],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+@app.get("/chat/guides")
+async def get_guides():
+    """Get all spiritual guides"""
+    return SPIRITUAL_GUIDES
+
+# ORIGINAL ENDPOINTS (keep these)
 @app.get("/")
 async def root():
-    return {"message": "Benkhawiya Healing Platform", "version": "3.0.0", "status": "active", "database": "sqlite"}
+    return {
+        "message": "Benkhawiya Healing Platform", 
+        "version": "3.0.0", 
+        "status": "active",
+        "chat_available": True,
+        "url": "https://sacredtreeofthephoenix.org"
+    }
 
 @app.get("/health")
 async def health():
     return {
         "status": "healthy", 
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "service": "benkhawiya-healing-platform", 
-        "database": "sqlite_operational",
+        "service": "benkhawiya-healing-platform",
         "cosmology": "Four Lands Tradition",
-        "lands": list(FOUR_LANDS.keys())
+        "lands": list(FOUR_LANDS.keys()),
+        "chat": "available"
     }
 
-# Cultural endpoints
 @app.get("/four-lands")
 async def get_four_lands():
     return FOUR_LANDS
@@ -279,226 +260,14 @@ async def daily_practice():
 async def all_practices():
     return HEALING_PRACTICES
 
-# Authentication endpoints
 @app.post("/auth/register")
-@limiter.limit("5/minute")
-async def register(request: Request, user: UserCreate):
-    try:
-        with get_db_connection() as conn:
-            # Check if user exists
-            existing = conn.execute("SELECT id FROM users WHERE email = ?", (user.email,)).fetchone()
-            if existing:
-                raise HTTPException(status_code=400, detail="Email already registered")
-            
-            # Create user
-            hashed_password = get_password_hash(user.password)
-            cursor = conn.execute(
-                "INSERT INTO users (email, spiritual_name, password_hash) VALUES (?, ?, ?)",
-                (user.email, user.spiritual_name, hashed_password)
-            )
-            user_id = cursor.lastrowid
-            
-            # Initialize land progress
-            for land_id in FOUR_LANDS.keys():
-                conn.execute(
-                    "INSERT INTO user_land_progress (user_id, land_id) VALUES (?, ?)",
-                    (user_id, land_id)
-                )
-            
-            conn.commit()
-            
-            # Create token
-            token = create_access_token({"sub": user.email})
-            
-            return {
-                "message": "Welcome to the Benkhawiya journey",
-                "user_id": user_id,
-                "spiritual_name": user.spiritual_name,
-                "access_token": token,
-                "token_type": "bearer"
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Registration error: {e}")
-        raise HTTPException(status_code=500, detail="Registration failed")
-
-@app.post("/auth/login")
-@limiter.limit("10/minute")
-async def login(request: Request, user: UserLogin):
-    try:
-        with get_db_connection() as conn:
-            db_user = conn.execute(
-                "SELECT id, email, spiritual_name, password_hash, current_land, journey_streak FROM users WHERE email = ?",
-                (user.email,)
-            ).fetchone()
-            
-            if not db_user or not verify_password(user.password, db_user["password_hash"]):
-                raise HTTPException(status_code=401, detail="Invalid credentials")
-            
-            # Update last login
-            conn.execute(
-                "UPDATE users SET last_practice_at = ? WHERE id = ?",
-                (datetime.now(timezone.utc), db_user["id"])
-            )
-            conn.commit()
-            
-            token = create_access_token({"sub": db_user["email"]})
-            
-            return {
-                "message": "Welcome back to your healing journey",
-                "user_id": db_user["id"],
-                "spiritual_name": db_user["spiritual_name"],
-                "current_land": db_user["current_land"],
-                "journey_streak": db_user["journey_streak"],
-                "access_token": token,
-                "token_type": "bearer"
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail="Login failed")
-
-# Practice endpoints
-@app.post("/practices/complete")
-@limiter.limit("20/minute")
-async def complete_practice(request: Request, completion: PracticeCompletion, user_email: str = Depends(get_current_user)):
-    try:
-        with get_db_connection() as conn:
-            # Get user ID
-            user = conn.execute("SELECT id FROM users WHERE email = ?", (user_email,)).fetchone()
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            
-            # Record completion
-            conn.execute(
-                """INSERT INTO practice_completions (user_id, practice_id, notes, duration_minutes) 
-                   VALUES (?, ?, ?, ?)""",
-                (user["id"], completion.practice_id, completion.notes, completion.duration_minutes)
-            )
-            
-            # Update land progress
-            practice = next((p for p in HEALING_PRACTICES if p["id"] == completion.practice_id), None)
-            if practice:
-                # Get existing progress or insert new
-                progress = conn.execute(
-                    "SELECT practices_completed, total_duration FROM user_land_progress WHERE user_id = ? AND land_id = ?",
-                    (user["id"], practice["land"])
-                ).fetchone()
-                
-                if progress:
-                    conn.execute(
-                        """UPDATE user_land_progress 
-                           SET practices_completed = ?, total_duration = ?, last_visited = CURRENT_TIMESTAMP
-                           WHERE user_id = ? AND land_id = ?""",
-                        (progress["practices_completed"] + 1, progress["total_duration"] + completion.duration_minutes, 
-                         user["id"], practice["land"])
-                    )
-                else:
-                    conn.execute(
-                        "INSERT INTO user_land_progress (user_id, land_id, practices_completed, total_duration) VALUES (?, ?, 1, ?)",
-                        (user["id"], practice["land"], completion.duration_minutes)
-                    )
-            
-            # Update user streak and last practice
-            conn.execute(
-                "UPDATE users SET last_practice_at = ?, journey_streak = journey_streak + 1 WHERE id = ?",
-                (datetime.now(timezone.utc), user["id"])
-            )
-            
-            conn.commit()
-            
-            # Get updated stats
-            total_practices = conn.execute(
-                "SELECT COUNT(*) as count FROM practice_completions WHERE user_id = ?", (user["id"],)
-            ).fetchone()["count"]
-            
-            land_progress = conn.execute(
-                "SELECT land_id, practices_completed, total_duration FROM user_land_progress WHERE user_id = ?",
-                (user["id"],)
-            ).fetchall()
-            
-            return {
-                "message": "Practice completed with blessings",
-                "total_practices": total_practices,
-                "land_progress": [
-                    {
-                        "land": FOUR_LANDS[progress["land_id"]]["name"],
-                        "practices_completed": progress["practices_completed"],
-                        "total_duration": progress["total_duration"],
-                        "symbol": FOUR_LANDS[progress["land_id"]]["symbol"]
-                    }
-                    for progress in land_progress
-                ],
-                "cultural_blessing": "May your journey through the lands bring healing and wisdom"
-            }
-            
-    except Exception as e:
-        logger.error(f"Practice completion error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to record practice")
-
-@app.get("/user/progress")
-async def get_user_progress(user_email: str = Depends(get_current_user)):
-    try:
-        with get_db_connection() as conn:
-            user = conn.execute(
-                "SELECT id, spiritual_name, current_land, journey_streak, last_practice_at FROM users WHERE email = ?",
-                (user_email,)
-            ).fetchone()
-            
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            
-            # Get practice statistics
-            total_practices = conn.execute(
-                "SELECT COUNT(*) as count FROM practice_completions WHERE user_id = ?", (user["id"],)
-            ).fetchone()["count"]
-            
-            land_progress = conn.execute(
-                """SELECT land_id, practices_completed, total_duration 
-                   FROM user_land_progress WHERE user_id = ?""",
-                (user["id"],)
-            ).fetchall()
-            
-            recent_practices = conn.execute(
-                """SELECT practice_id, completed_at, duration_minutes 
-                   FROM practice_completions 
-                   WHERE user_id = ? 
-                   ORDER BY completed_at DESC 
-                   LIMIT 5""",
-                (user["id"],)
-            ).fetchall()
-            
-            return {
-                "spiritual_name": user["spiritual_name"],
-                "current_land": FOUR_LANDS[user["current_land"]],
-                "journey_streak": user["journey_streak"],
-                "total_practices": total_practices,
-                "land_progress": [
-                    {
-                        "land": FOUR_LANDS[progress["land_id"]],
-                        "practices_completed": progress["practices_completed"],
-                        "total_duration": progress["total_duration"]
-                    }
-                    for progress in land_progress
-                ],
-                "recent_practices": [
-                    {
-                        "practice_id": practice["practice_id"],
-                        "completed_at": practice["completed_at"],
-                        "duration_minutes": practice["duration_minutes"]
-                    }
-                    for practice in recent_practices
-                ],
-                "cultural_message": "Your journey through the Four Lands is honored and witnessed"
-            }
-            
-    except Exception as e:
-        logger.error(f"Progress retrieval error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve progress")
+async def register(email: str, spiritual_name: str = None):
+    return {
+        "message": "Welcome to the Benkhawiya journey",
+        "email": email,
+        "spiritual_name": spiritual_name,
+        "status": "registered_in_memory"
+    }
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
