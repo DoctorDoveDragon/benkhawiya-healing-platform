@@ -12,7 +12,7 @@ import asyncpg
 import os
 import uvicorn
 import logging
-import jwt
+from jose import JWTError, jwt  # CORRECT IMPORT
 from passlib.context import CryptContext
 import asyncio
 from pydantic import BaseModel
@@ -273,7 +273,7 @@ async def get_current_user(token: str = Depends(security)):
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         return email
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 # Application lifespan
