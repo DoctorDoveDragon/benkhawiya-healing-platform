@@ -1,20 +1,41 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from datetime import datetime, timezone
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPBearer
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List, Dict
+import asyncpg
 import os
 import uvicorn
 import logging
+import jwt
+from passlib.context import CryptContext
+import asyncio
+from pydantic import BaseModel
+import json
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize FastAPI app
 app = FastAPI(
     title="Benkhawiya Healing Platform",
-    description="Ancestral spiritual healing through the Four Lands",
-    version="2.0.0"
+    description="Complete ancestral spiritual healing system through the Four Lands",
+    version="3.0.0"
 )
 
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,6 +43,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security
+security = HTTPBearer()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = os.getenv("SECRET_KEY", "benkhawiya-sacred-four-lands-ancestral-key-2024")
+ALGORITHM = "HS256"
+
+# Database connection
+database = None
 
 # CULTURAL FOUNDATION: THE FOUR LANDS
 FOUR_LANDS = {
@@ -32,7 +62,9 @@ FOUR_LANDS = {
         "teaching": "Wisdom and Clarity",
         "animal": "Eagle",
         "color": "Gold",
-        "practice": "Morning meditation for clear vision"
+        "symbol": "🦅",
+        "practice": "Morning meditation for clear vision",
+        "blessing": "May the Eastern winds bring you clarity and new beginnings"
     },
     "southern_land": {
         "name": "Land of Growth", 
@@ -41,7 +73,9 @@ FOUR_LANDS = {
         "teaching": "Passion and Transformation",
         "animal": "Lion",
         "color": "Red",
-        "practice": "Energy work for personal power"
+        "symbol": "🦁",
+        "practice": "Energy work for personal power",
+        "blessing": "May the Southern fire transform your challenges into strength"
     },
     "western_land": {
         "name": "Land of Introspection",
@@ -50,7 +84,9 @@ FOUR_LANDS = {
         "teaching": "Emotional Healing",
         "animal": "Bear",
         "color": "Blue",
-        "practice": "Evening reflection for emotional balance"
+        "symbol": "🐻",
+        "practice": "Evening reflection for emotional balance",
+        "blessing": "May the Western waters heal your heart and cleanse your spirit"
     },
     "northern_land": {
         "name": "Land of Ancestral Wisdom",
@@ -59,266 +95,454 @@ FOUR_LANDS = {
         "teaching": "Foundation and Tradition",
         "animal": "Buffalo",
         "color": "Green", 
-        "practice": "Ancestral connection practices"
+        "symbol": "🐃",
+        "practice": "Ancestral connection practices",
+        "blessing": "May the Northern earth connect you to ancestral wisdom and guidance"
     }
 }
 
 HEALING_PRACTICES = [
     {
+        "id": "eagle_vision",
         "name": "Eastern Gate: Eagle Vision Meditation",
         "land": "eastern_land",
         "description": "Connect with the Eastern Land's wisdom through elevated perspective",
         "duration": 15,
+        "difficulty": "beginner",
         "steps": [
             "Face East towards new beginnings",
             "Visualize golden light of dawn", 
             "Call upon Eagle's far-seeing vision",
-            "Receive clarity for your path ahead"
+            "Receive clarity for your path ahead",
+            "Offer gratitude for new perspectives"
         ],
-        "cultural_context": "The Eastern Land teaches us to see beyond immediate circumstances to the larger journey"
+        "cultural_context": "The Eastern Land teaches us to see beyond immediate circumstances to the larger journey of our soul"
     },
     {
+        "id": "lion_heart",
         "name": "Southern Fire: Lion Heart Activation",
         "land": "southern_land", 
         "description": "Ignite your inner fire with Southern Land's transformative energy",
         "duration": 20,
+        "difficulty": "intermediate",
         "steps": [
             "Face South with open heart",
-            "Feel the red fire of passion",
-            "Channel Lion's courage and strength", 
-            "Transform challenges into power"
+            "Feel the red fire of passion rising",
+            "Channel Lion's courage and royal presence", 
+            "Transform personal challenges into spiritual power",
+            "Claim your sacred authority"
         ],
-        "cultural_context": "The Southern Land reminds us that our greatest trials forge our strongest spirit"
+        "cultural_context": "The Southern Land reminds us that our greatest trials forge our strongest spirit and purpose"
     },
     {
+        "id": "bear_healing",
         "name": "Western Waters: Bear Heart Healing",
         "land": "western_land",
-        "description": "Journey inward with Western Land's healing waters",
+        "description": "Journey inward with Western Land's healing waters for emotional restoration",
         "duration": 25,
+        "difficulty": "intermediate",
         "steps": [
-            "Face West at sunset",
-            "Welcome blue healing waters",
-            "Enter Bear's cave of introspection",
-            "Release emotional burdens to the waters"
+            "Face West at sunset time",
+            "Welcome blue healing waters around you",
+            "Enter Bear's sacred cave of introspection",
+            "Release emotional burdens to the cleansing waters",
+            "Embrace deep emotional renewal"
         ],
-        "cultural_context": "The Western Land teaches that true strength comes from emotional honesty and healing"
+        "cultural_context": "The Western Land teaches that true warrior strength comes from emotional honesty and healing vulnerability"
     },
     {
+        "id": "buffalo_ancestors",
         "name": "Northern Roots: Buffalo Ancestral Connection", 
         "land": "northern_land",
-        "description": "Ground in ancestral wisdom through Northern Land's stability",
+        "description": "Ground in ancestral wisdom through Northern Land's enduring stability",
         "duration": 30,
+        "difficulty": "advanced",
         "steps": [
-            "Face North under night sky",
-            "Feel green earth energy rising",
-            "Connect with Buffalo's enduring spirit",
-            "Receive ancestral guidance and blessings"
+            "Face North under the starry sky",
+            "Feel green earth energy rising through you",
+            "Connect with Buffalo's generous and enduring spirit",
+            "Receive ancestral guidance and blessings",
+            "Commit to walking in sacred manner"
         ],
-        "cultural_context": "The Northern Land reminds us we walk on the shoulders of ancestors who guide our path"
+        "cultural_context": "The Northern Land reminds us we walk on the shoulders of ancestors who guide our path and await our honoring"
     }
 ]
 
-@app.get("/", response_class=HTMLResponse)
-async def cultural_homepage():
-    return '''
-    <html>
-        <head>
-            <title>Benkhawiya Healing Platform</title>
-            <style>
-                body { 
-                    font-family: 'Georgia', serif;
-                    margin: 0;
-                    padding: 20px;
-                    background: #0a2f1c;
-                    color: #e8d8b8;
-                    min-height: 100vh;
-                }
-                .container {
-                    max-width: 900px;
-                    margin: 0 auto;
-                    background: rgba(20, 60, 40, 0.8);
-                    padding: 30px;
-                    border-radius: 15px;
-                    border: 2px solid #8b7355;
-                }
-                h1 { 
-                    color: #d4af37;
-                    text-align: center;
-                    font-size: 2.5em;
-                    margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px #000;
-                }
-                .subtitle {
-                    text-align: center;
-                    color: #b8860b;
-                    font-style: italic;
-                    margin-bottom: 30px;
-                }
-                .lands-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 20px;
-                    margin: 30px 0;
-                }
-                .land-card {
-                    background: rgba(139, 115, 85, 0.3);
-                    padding: 20px;
-                    border-radius: 10px;
-                    border: 1px solid #8b7355;
-                    text-align: center;
-                }
-                .land-card.east { border-top: 5px solid #ffd700; }
-                .land-card.south { border-top: 5px solid #dc143c; }
-                .land-card.west { border-top: 5px solid #1e90ff; }
-                .land-card.north { border-top: 5px solid #228b22; }
-                
-                .practice-card {
-                    background: rgba(212, 175, 55, 0.1);
-                    padding: 20px;
-                    margin: 20px 0;
-                    border-radius: 10px;
-                    border-left: 5px solid #d4af37;
-                }
-                .btn {
-                    background: #8b7355;
-                    color: #e8d8b8;
-                    border: none;
-                    padding: 12px 24px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    margin: 10px 5px;
-                    font-family: 'Georgia', serif;
-                    border: 1px solid #d4af37;
-                }
-                .btn:hover {
-                    background: #d4af37;
-                    color: #0a2f1c;
-                }
-                .cultural-context {
-                    font-style: italic;
-                    color: #b8860b;
-                    border-top: 1px solid #8b7355;
-                    padding-top: 10px;
-                    margin-top: 15px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🌿 Benkhawiya Healing Platform</h1>
-                <div class="subtitle">Walking the Sacred Path Through the Four Lands</div>
-                
-                <div class="lands-grid">
-                    <div class="land-card east">
-                        <h3>🦅 Eastern Land</h3>
-                        <p>Land of New Beginnings</p>
-                        <p><em>Element: Air • Teaching: Wisdom</em></p>
-                    </div>
-                    <div class="land-card south">
-                        <h3>🦁 Southern Land</h3>
-                        <p>Land of Growth</p>
-                        <p><em>Element: Fire • Teaching: Transformation</em></p>
-                    </div>
-                    <div class="land-card west">
-                        <h3>🐻 Western Land</h3>
-                        <p>Land of Introspection</p>
-                        <p><em>Element: Water • Teaching: Healing</em></p>
-                    </div>
-                    <div class="land-card north">
-                        <h3>🐃 Northern Land</h3>
-                        <p>Land of Ancestral Wisdom</p>
-                        <p><em>Element: Earth • Teaching: Foundation</em></p>
-                    </div>
-                </div>
+# Pydantic Models
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    spiritual_name: Optional[str] = None
 
-                <div id="daily-practice">
-                    <h2>Today's Journey Through the Lands</h2>
-                    <div id="practice-content">
-                        <div class="practice-card">
-                            <h3 id="practice-name">Loading your sacred practice...</h3>
-                            <p id="practice-desc"></p>
-                            <div id="practice-steps"></div>
-                            <div id="cultural-context" class="cultural-context"></div>
-                        </div>
-                    </div>
-                    <button class="btn" onclick="beginJourney()">Begin Sacred Journey</button>
-                    <button class="btn" onclick="completeJourney()">Complete Journey</button>
-                    <div id="journey-status"></div>
-                </div>
+class UserLogin(BaseModel):
+    email: str
+    password: str
 
-                <div style="text-align: center; margin-top: 30px;">
-                    <p><em>"We walk the four lands not as separate places, but as one continuous sacred circle of being."</em></p>
-                </div>
-            </div>
+class PracticeCompletion(BaseModel):
+    practice_id: str
+    notes: Optional[str] = None
+    duration_minutes: int
 
-            <script>
-                // Load today's culturally-grounded practice
-                fetch('/practices/daily')
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('practice-name').textContent = data.practice_data.name;
-                        document.getElementById('practice-desc').textContent = data.practice_data.description;
-                        
-                        let stepsHtml = '<h4>Journey Steps:</h4><ol>';
-                        data.practice_data.steps.forEach(step => {
-                            stepsHtml += `<li>${step}</li>`;
-                        });
-                        stepsHtml += '</ol>';
-                        document.getElementById('practice-steps').innerHTML = stepsHtml;
-                        
-                        document.getElementById('cultural-context').textContent = 
-                            data.practice_data.cultural_context;
-                    });
+class UserProfile(BaseModel):
+    spiritual_name: str
+    current_land: str = "eastern_land"
+    journey_streak: int = 0
 
-                function beginJourney() {
-                    const landName = document.getElementById('practice-name').textContent.split(':')[0];
-                    document.getElementById('journey-status').innerHTML = 
-                        `<p style="color: #d4af37;">🕊️ Beginning your journey through ${landName}... May the ancestors guide your steps.</p>`;
-                }
+# Database functions
+async def get_database():
+    global database
+    if database is None:
+        try:
+            database_url = os.getenv("DATABASE_URL")
+            if database_url:
+                database = await asyncpg.create_pool(database_url)
+                await init_tables()
+                logger.info("Database connection established")
+            else:
+                logger.warning("DATABASE_URL not set - running in memory mode")
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+    return database
 
-                function completeJourney() {
-                    document.getElementById('journey-status').innerHTML = 
-                        `<p style="color: #228b22;">✅ Journey completed! The lands have received your prayers. 
-                        <br><em>"With each completed journey, we strengthen the circle for all who follow."</em></p>`;
-                }
-            </script>
-        </body>
-    </html>
-    '''
+async def init_tables():
+    """Initialize database tables"""
+    try:
+        async with database.acquire() as conn:
+            # Users table
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    spiritual_name VARCHAR(255),
+                    password_hash VARCHAR(255) NOT NULL,
+                    current_land VARCHAR(50) DEFAULT 'eastern_land',
+                    journey_streak INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_practice_at TIMESTAMP
+                )
+            ''')
+            
+            # Practice completions
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS practice_completions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    practice_id VARCHAR(100) NOT NULL,
+                    notes TEXT,
+                    duration_minutes INTEGER,
+                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # User progress
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS user_land_progress (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    land_id VARCHAR(50) NOT NULL,
+                    practices_completed INTEGER DEFAULT 0,
+                    total_duration INTEGER DEFAULT 0,
+                    last_visited TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            logger.info("Database tables initialized")
+    except Exception as e:
+        logger.error(f"Table initialization failed: {e}")
+
+# Authentication functions
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(security)):
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return email
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+# Application lifespan
+@app.on_event("startup")
+async def startup_event():
+    await get_database()
+    logger.info("Benkhawiya Healing Platform started successfully")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if database:
+        await database.close()
+        logger.info("Database connection closed")
+
+# Routes
+@app.get("/")
+async def root():
+    return {"message": "Benkhawiya Healing Platform", "version": "3.0.0", "status": "active"}
 
 @app.get("/health")
 async def health():
+    db_status = "connected" if database else "disconnected"
     return {
         "status": "healthy", 
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "benkhawiya-healing-platform",
-        "domain": "sacredtreeofthephoenix.org",
+        "database": db_status,
         "cultural_foundation": "Four Lands Tradition"
     }
 
+# Cultural endpoints
+@app.get("/four-lands")
+async def get_four_lands():
+    return FOUR_LANDS
+
 @app.get("/practices/daily")
 async def daily_practice():
+    """Get today's practice based on day of year"""
     day_of_year = datetime.now().timetuple().tm_yday
     practice_data = HEALING_PRACTICES[day_of_year % len(HEALING_PRACTICES)]
     land_info = FOUR_LANDS[practice_data["land"]]
     
     return {
-        "practice": f"{practice_data['name']} - {land_info['name']}",
+        "practice": practice_data,
+        "land_info": land_info,
         "day_of_year": day_of_year,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "practice_data": practice_data,
-        "land_info": land_info
+        "cultural_blessing": land_info["blessing"]
     }
 
 @app.get("/practices/all")
 async def all_practices():
     return HEALING_PRACTICES
 
-@app.get("/four-lands")
-async def four_lands():
-    return FOUR_LANDS
+# Authentication endpoints
+@app.post("/auth/register")
+@limiter.limit("5/minute")
+async def register(request: Request, user: UserCreate):
+    db = await get_database()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    try:
+        async with db.acquire() as conn:
+            # Check if user exists
+            existing = await conn.fetchrow("SELECT id FROM users WHERE email = $1", user.email)
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            
+            # Create user
+            hashed_password = get_password_hash(user.password)
+            user_id = await conn.fetchval(
+                "INSERT INTO users (email, spiritual_name, password_hash) VALUES ($1, $2, $3) RETURNING id",
+                user.email, user.spiritual_name, hashed_password
+            )
+            
+            # Initialize land progress
+            for land_id in FOUR_LANDS.keys():
+                await conn.execute(
+                    "INSERT INTO user_land_progress (user_id, land_id) VALUES ($1, $2)",
+                    user_id, land_id
+                )
+            
+            # Create token
+            token = create_access_token({"sub": user.email})
+            
+            return {
+                "message": "Welcome to the Benkhawiya journey",
+                "user_id": user_id,
+                "spiritual_name": user.spiritual_name,
+                "access_token": token,
+                "token_type": "bearer"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.post("/auth/login")
+@limiter.limit("10/minute")
+async def login(request: Request, user: UserLogin):
+    db = await get_database()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    try:
+        async with db.acquire() as conn:
+            db_user = await conn.fetchrow(
+                "SELECT id, email, spiritual_name, password_hash, current_land, journey_streak FROM users WHERE email = $1",
+                user.email
+            )
+            
+            if not db_user or not verify_password(user.password, db_user["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            
+            # Update last login
+            await conn.execute(
+                "UPDATE users SET last_practice_at = $1 WHERE id = $2",
+                datetime.now(timezone.utc), db_user["id"]
+            )
+            
+            token = create_access_token({"sub": db_user["email"]})
+            
+            return {
+                "message": "Welcome back to your healing journey",
+                "user_id": db_user["id"],
+                "spiritual_name": db_user["spiritual_name"],
+                "current_land": db_user["current_land"],
+                "journey_streak": db_user["journey_streak"],
+                "access_token": token,
+                "token_type": "bearer"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+# Practice endpoints
+@app.post("/practices/complete")
+@limiter.limit("20/minute")
+async def complete_practice(request: Request, completion: PracticeCompletion, user_email: str = Depends(get_current_user)):
+    db = await get_database()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    try:
+        async with db.acquire() as conn:
+            # Get user ID
+            user = await conn.fetchrow("SELECT id FROM users WHERE email = $1", user_email)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Record completion
+            await conn.execute(
+                """INSERT INTO practice_completions (user_id, practice_id, notes, duration_minutes) 
+                   VALUES ($1, $2, $3, $4)""",
+                user["id"], completion.practice_id, completion.notes, completion.duration_minutes
+            )
+            
+            # Update land progress
+            practice = next((p for p in HEALING_PRACTICES if p["id"] == completion.practice_id), None)
+            if practice:
+                await conn.execute(
+                    """INSERT INTO user_land_progress (user_id, land_id, practices_completed, total_duration) 
+                       VALUES ($1, $2, 1, $3)
+                       ON CONFLICT (user_id, land_id) 
+                       DO UPDATE SET 
+                         practices_completed = user_land_progress.practices_completed + 1,
+                         total_duration = user_land_progress.total_duration + $3,
+                         last_visited = CURRENT_TIMESTAMP""",
+                    user["id"], practice["land"], completion.duration_minutes
+                )
+            
+            # Update user streak and last practice
+            await conn.execute(
+                "UPDATE users SET last_practice_at = $1, journey_streak = journey_streak + 1 WHERE id = $2",
+                datetime.now(timezone.utc), user["id"]
+            )
+            
+            # Get updated stats
+            total_practices = await conn.fetchval(
+                "SELECT COUNT(*) FROM practice_completions WHERE user_id = $1", user["id"]
+            )
+            
+            land_progress = await conn.fetch(
+                "SELECT land_id, practices_completed, total_duration FROM user_land_progress WHERE user_id = $1",
+                user["id"]
+            )
+            
+            return {
+                "message": "Practice completed with blessings",
+                "total_practices": total_practices,
+                "land_progress": [
+                    {
+                        "land": FOUR_LANDS[progress["land_id"]]["name"],
+                        "practices_completed": progress["practices_completed"],
+                        "total_duration": progress["total_duration"],
+                        "symbol": FOUR_LANDS[progress["land_id"]]["symbol"]
+                    }
+                    for progress in land_progress
+                ],
+                "cultural_blessing": "May your journey through the lands bring healing and wisdom"
+            }
+            
+    except Exception as e:
+        logger.error(f"Practice completion error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record practice")
+
+@app.get("/user/progress")
+async def get_user_progress(user_email: str = Depends(get_current_user)):
+    db = await get_database()
+    if not db:
+        return {"message": "Database offline - progress tracking unavailable"}
+    
+    try:
+        async with db.acquire() as conn:
+            user = await conn.fetchrow(
+                "SELECT id, spiritual_name, current_land, journey_streak, last_practice_at FROM users WHERE email = $1",
+                user_email
+            )
+            
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Get practice statistics
+            total_practices = await conn.fetchval(
+                "SELECT COUNT(*) FROM practice_completions WHERE user_id = $1", user["id"]
+            )
+            
+            land_progress = await conn.fetch(
+                """SELECT land_id, practices_completed, total_duration 
+                   FROM user_land_progress WHERE user_id = $1""",
+                user["id"]
+            )
+            
+            recent_practices = await conn.fetch(
+                """SELECT practice_id, completed_at, duration_minutes 
+                   FROM practice_completions 
+                   WHERE user_id = $1 
+                   ORDER BY completed_at DESC 
+                   LIMIT 5""",
+                user["id"]
+            )
+            
+            return {
+                "spiritual_name": user["spiritual_name"],
+                "current_land": FOUR_LANDS[user["current_land"]],
+                "journey_streak": user["journey_streak"],
+                "total_practices": total_practices,
+                "land_progress": [
+                    {
+                        "land": FOUR_LANDS[progress["land_id"]],
+                        "practices_completed": progress["practices_completed"],
+                        "total_duration": progress["total_duration"]
+                    }
+                    for progress in land_progress
+                ],
+                "recent_practices": recent_practices,
+                "cultural_message": "Your journey through the Four Lands is honored and witnessed"
+            }
+            
+    except Exception as e:
+        logger.error(f"Progress retrieval error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve progress")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
-    logger.info(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
