@@ -1,13 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
+import sqlite3
 import os
 import uvicorn
-import random
+import logging
+from contextlib import contextmanager
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
 app = FastAPI(
     title="Benkhawiya Healing Platform",
-    description="Sacred Four Lands Ancestral Healing System",
+    description="Complete ancestral spiritual healing system through the Four Lands",
     version="3.0.0"
 )
 
@@ -20,7 +27,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Sacred Four Lands Tradition
+# Database connection
+@contextmanager
+def get_db_connection():
+    """Get SQLite database connection"""
+    conn = sqlite3.connect('benkhawiya.db')
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+# CULTURAL FOUNDATION: THE FOUR LANDS
 FOUR_LANDS = {
     "white_land": {
         "name": "White Land of Origins",
@@ -107,137 +125,23 @@ HEALING_PRACTICES = [
     }
 ]
 
-# Spiritual Guidance System
-SPIRITUAL_GUIDES = {
-    "white_land": {
-        "guide": "White Buffalo Ancestor",
-        "wisdom": [
-            "The White Land holds pure consciousness that precedes all manifestation",
-            "Your ancestral memories flow through you like a sacred river",
-            "Memory is re-membering - putting the pieces of your soul back together",
-            "Ancestral recall is reaching inward to the eternal now"
-        ],
-        "chants": ["Ntu dumo, sewu karibu", "Ntu se sewu wapi?"]
-    },
-    "black_land": {
-        "guide": "Quantum Panther of the Void",
-        "wisdom": [
-            "The Black Land is the quantum field of infinite possibilities",
-            "The void is pregnant with every possible creation",
-            "True potential is what the universe can do through you",
-            "In the void, there is no separation between what is and what could be"
-        ],
-        "chants": ["Sewu wapi, ntu tayari", "Pelu ya wewe ni nini?"]
-    },
-    "red_land": {
-        "guide": "Red Hawk of Manifestation",
-        "wisdom": [
-            "The Red Land transforms potential into reality through creative fire",
-            "Your life force is the cosmic creative impulse made personal",
-            "Manifestation is allowing what wants to happen through you",
-            "The Red Hawk sees patterns wanting to manifest through your actions"
-        ],
-        "chants": ["Moyo wa moto, uwezo wa kuumba", "Pelu inatoka nje"]
-    },
-    "green_land": {
-        "guide": "Green Serpent of Regeneration", 
-        "wisdom": [
-            "The Green Land connects all beings in the great web of relationship",
-            "Healing flows through you to the collective and back again",
-            "Regeneration is remembering what is already whole",
-            "Your breath is the same breath that moves through forests and oceans"
-        ],
-        "chants": ["Mimea inmea, uhai unazidi", "Moyo mmoja, roho nyingi"]
-    }
-}
-
-def analyze_spiritual_intent(message: str):
-    message_lower = message.lower()
-    
-    if any(word in message_lower for word in ["ancestor", "memory", "white", "spirit", "past"]):
-        land = "white_land"
-    elif any(word in message_lower for word in ["void", "potential", "black", "possibility", "future"]):
-        land = "black_land"
-    elif any(word in message_lower for word in ["manifest", "red", "fire", "create", "action"]):
-        land = "red_land"
-    elif any(word in message_lower for word in ["green", "heal", "grow", "connect", "earth"]):
-        land = "green_land"
-    else:
-        land = random.choice(list(FOUR_LANDS.keys()))
-    
-    return {
-        "primary_land": land,
-        "confidence": 0.8,
-        "emotional_tone": "guidance"
-    }
-
-def generate_spiritual_response(message: str):
-    intent = analyze_spiritual_intent(message)
-    land = intent["primary_land"]
-    guide = SPIRITUAL_GUIDES[land]
-    
-    wisdom = random.choice(guide["wisdom"])
-    chant = random.choice(guide["chants"])
-    
-    return {
-        "guide": guide["guide"],
-        "message": wisdom,
-        "chant": chant,
-        "land": land,
-        "land_info": FOUR_LANDS[land],
-        "blessing": FOUR_LANDS[land]["blessing"],
-        "user_message": message
-    }
-
-# CHAT ENDPOINTS - These are the missing ones!
-@app.post("/chat/send")
-async def chat_send(message: str = None):
-    """Send a message to spiritual guides"""
-    response = generate_spiritual_response(message)
-    return {
-        **response,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "guided"
-    }
-
-@app.get("/chat/analysis")
-async def chat_analysis(message: str):
-    """Analyze spiritual intent of a message"""
-    intent = analyze_spiritual_intent(message)
-    return {
-        "analysis": intent,
-        "user_message": message,
-        "suggested_land": FOUR_LANDS[intent["primary_land"]],
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
-@app.get("/chat/guides")
-async def get_guides():
-    """Get all spiritual guides"""
-    return SPIRITUAL_GUIDES
-
-# ORIGINAL ENDPOINTS (keep these)
+# Routes
 @app.get("/")
 async def root():
-    return {
-        "message": "Benkhawiya Healing Platform", 
-        "version": "3.0.0", 
-        "status": "active",
-        "chat_available": True,
-        "url": "https://sacredtreeofthephoenix.org"
-    }
+    return {"message": "Benkhawiya Healing Platform", "version": "3.0.0", "status": "active", "database": "sqlite"}
 
 @app.get("/health")
 async def health():
     return {
         "status": "healthy", 
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "service": "benkhawiya-healing-platform",
+        "service": "benkhawiya-healing-platform", 
+        "database": "sqlite_operational",
         "cosmology": "Four Lands Tradition",
-        "lands": list(FOUR_LANDS.keys()),
-        "chat": "available"
+        "lands": list(FOUR_LANDS.keys())
     }
 
+# Cultural endpoints
 @app.get("/four-lands")
 async def get_four_lands():
     return FOUR_LANDS
@@ -260,14 +164,73 @@ async def daily_practice():
 async def all_practices():
     return HEALING_PRACTICES
 
+# Simple user endpoints without authentication
 @app.post("/auth/register")
 async def register(email: str, spiritual_name: str = None):
-    return {
-        "message": "Welcome to the Benkhawiya journey",
-        "email": email,
-        "spiritual_name": spiritual_name,
-        "status": "registered_in_memory"
-    }
+    try:
+        with get_db_connection() as conn:
+            # Simple registration without password for now
+            cursor = conn.execute(
+                "INSERT INTO users (email, spiritual_name, password_hash) VALUES (?, ?, ?)",
+                (email, spiritual_name, "simple_auth")
+            )
+            user_id = cursor.lastrowid
+            
+            # Initialize land progress
+            for land_id in FOUR_LANDS.keys():
+                conn.execute(
+                    "INSERT INTO user_land_progress (user_id, land_id) VALUES (?, ?)",
+                    (user_id, land_id)
+                )
+            
+            conn.commit()
+            
+            return {
+                "message": "Welcome to the Benkhawiya journey",
+                "user_id": user_id,
+                "spiritual_name": spiritual_name,
+                "status": "registered"
+            }
+            
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.get("/user/progress/{user_id}")
+async def get_user_progress(user_id: int):
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute(
+                "SELECT spiritual_name, current_land, journey_streak FROM users WHERE id = ?",
+                (user_id,)
+            ).fetchone()
+            
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            land_progress = conn.execute(
+                """SELECT land_id, practices_completed, total_duration 
+                   FROM user_land_progress WHERE user_id = ?""",
+                (user_id,)
+            ).fetchall()
+            
+            return {
+                "spiritual_name": user["spiritual_name"],
+                "current_land": FOUR_LANDS[user["current_land"]],
+                "journey_streak": user["journey_streak"],
+                "land_progress": [
+                    {
+                        "land": FOUR_LANDS[progress["land_id"]],
+                        "practices_completed": progress["practices_completed"],
+                        "total_duration": progress["total_duration"]
+                    }
+                    for progress in land_progress
+                ]
+            }
+            
+    except Exception as e:
+        logger.error(f"Progress retrieval error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve progress")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
